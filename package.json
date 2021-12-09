@@ -1,0 +1,23 @@
+{
+  "name": "guild-manager-bot",
+  "version": "1.0.0",
+  "description": "Bot to support Guild Manager web app needs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Konca/gm-discord-bot.git"
+  },
+  "author": "Ivan Koncani",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Konca/gm-discord-bot/issues"
+  },
+  "homepage": "https://github.com/Konca/gm-discord-bot#readme",
+  "dependencies": {
+    "discord.js": "^13.3.1",
+    "node-fetch": "^2.6.6"
+  }
+}

@@ -134,6 +134,6 @@ const getMembers = (serverId) => {
 };
 
 const getUsers = async (serverId) => {};
-client.login("OTE1MTkwODcwMDgzNTA2MTk3.YaX_6g.xQlqDw127HGtG2ER3C1Qlb6T4_w");
+client.login("Tokenhere");
 
 //https://discord.com/oauth2/authorize?client_id=915190870083506197&scope=bot&permissions=423860104288

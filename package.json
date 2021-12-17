@@ -18,6 +18,7 @@
   "homepage": "https://github.com/Konca/gm-discord-bot#readme",
   "dependencies": {
     "discord.js": "^13.3.1",
+    "firebase": "^8.10.0",
     "node-fetch": "^2.6.6"
   }
 }

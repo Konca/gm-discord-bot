@@ -13,6 +13,8 @@ const client = new Discord.Client({
   ],
 });
 const firebaseConfig = require("./assets/key/guild-manager.json");
+const botToken = require("./assets/key/bot-token.json");
+
 firebase.initializeApp(firebaseConfig);
 var db = firebase.firestore();
 
@@ -35,20 +37,39 @@ client.on("messageCreate", (message) => {
         Name: args[0],
         Server: args[1],
         Id: message.guild.id,
-        Members: guildData.Members,
         Roles: guildData.Roles,
       };
       saveHandler(GInfo, {
         saveDoc: "guild",
         guildId: message.guild.id,
       }).then((res) => {
+        saveHandler(
+          { ...guildData.Members },
+          {
+            saveDoc: "members",
+            guildId: message.guild.id,
+          }
+        );
         message.author.send(res);
       });
+    });
+  } else if (command === "updatemembers") {
+    getGuildData(message.guild.id).then((guildData) => {
+      saveHandler(
+        { ...guildData.Members },
+        {
+          saveDoc: "members",
+          guildId: message.guild.id,
+        }
+      );
+      message.author.send(res);
     });
   } else if (command === "help")
     message.channel.send(
       ///include list of servers to xcheck
-      "Use '£createguild Guild-Name RGN-Server-Name' (RGN can be US,EU,KR,TW) to create or update your guild"
+      "Use '£createguild Guild-Name RGN-Server-Name' (RGN can be US,EU,KR,TW) to create or update your guild. \n" +
+        "Use '£updatemembers' to update the guild member list. \n" +
+        "Use '£uploadraid RaidId' to upload the selected raid to the webpage."
     );
   else if (command === "readraid") {
     readHandler({
@@ -56,7 +77,6 @@ client.on("messageCreate", (message) => {
       guildId: message.guild.id,
       raidId: args[0],
     }).then((data) => {
-      console.log(data.SortedRaids);
       message.channel.send("raid ID: " + data.Id);
     });
   }
@@ -69,11 +89,14 @@ client.on("messageCreate", (message) => {
           if (dataJSON.serverid !== undefined) {
             const raidEvent = sortNewRaid(
               {
+                CreatorName: dataJSON.leadername,
+                CreatorId: dataJSON.leaderid,
                 Name: dataJSON.title,
                 Description: dataJSON.description,
-                ID: args[0],
-                Date: firebase.firestore.Timestamp.fromDate(dataJSON.date),///FIX THIS AND  ITS GOOOD!
-                Time: dataJSON.time,
+                Id: args[0],
+                Date: firebase.firestore.Timestamp.fromMillis(
+                  +dataJSON.unixtime * 1000
+                ),
               },
               dataJSON.signups
             );
@@ -82,10 +105,16 @@ client.on("messageCreate", (message) => {
               guildId: message.guild.id,
               raidId: args[0],
             }).then((data) => {
-              if (data === undefined) {
-                //console.log(raidEvent)
-                //Object.keys(raidEvent.SortedRaids.RaidMembers).forEach(even=>console.log(raidEvent.SortedRaids.RaidMembers[even]))
-                saveHandler(raidEvent, {saveDoc:"raid",
+              if (data !== undefined) {
+                const updatedRaidEvent=updateRaidMembers(raidEvent, data);
+                saveHandler(updatedRaidEvent, {
+                  saveDoc: "raid",
+                  guildId: message.guild.id,
+                  raidId: args[0],
+                });
+              } else {
+                saveHandler(raidEvent, {
+                  saveDoc: "raid",
                   guildId: message.guild.id,
                   raidId: args[0],
                 });
@@ -100,6 +129,7 @@ client.on("messageCreate", (message) => {
       } else message.channel.send("Raid Helper not reachable");
     });
   } else message.channel.send("type '£help' for more info");
+  message.delete();
 });
 const readHandler = async (path) => {
   if (path.loadDoc === "guild") {
@@ -120,6 +150,18 @@ const saveHandler = async (saveData, path) => {
     return db
       .collection("guilds")
       .doc(path.guildId)
+      .set(saveData)
+      .then((docRef) => {
+        return "Command carried out successfully!!";
+      })
+      .catch((error) => {
+        return "Error handling request... " + error;
+      });
+  }
+  if (path.saveDoc === "raid") {
+    return db
+      .collection("guilds")
+      .doc(path.guildId)
       .collection("raids")
       .doc(path.raidId)
       .set(saveData)
@@ -130,13 +172,12 @@ const saveHandler = async (saveData, path) => {
         return "Error handling request... " + error;
       });
   }
-  if (path.saveDoc === "raid") {
-    console.log(path)
+  if (path.saveDoc === "members") {
     return db
       .collection("guilds")
       .doc(path.guildId)
-      .collection("raids")
-      .doc(path.raidId)
+      .collection("members")
+      .doc("AllMembers")
       .set(saveData)
       .then((docRef) => {
         return "Command carried out successfully!!";
@@ -165,7 +206,7 @@ const getGuildData = async (serverId) => {
     roles.forEach((role) => {
       allRoles[role.rawPosition] = {
         Name: role.name,
-        ID: role.id,
+        Id: role.id,
       };
     });
   });
@@ -176,24 +217,21 @@ const getGuildData = async (serverId) => {
 const formatRaidKeyVals = (element) => {
   const newElement = {
     Class: element.class,
-    ID: element.userid,
+    Id: element.userid,
     Name: element.name,
     Role: element.role,
     Spec: element.spec,
-    Status: element.status,
+    Status: "Signed",
     AssignedTo: "Nothing",
   };
-
-  if (newElement.Role === "Absence") newElement.AssignedTo = "Absent";
+  if (newElement.Class === "Absence") newElement.AssignedTo = "Absent";
   if (
-    newElement.Role === "Absence" ||
-    newElement.Role === "Tentative" ||
-    newElement.Role === "Late" ||
-    newElement.Role === "Bench"
+    newElement.Class === "Absence" ||
+    newElement.Class === "Tentative" ||
+    newElement.Class === "Late" ||
+    newElement.Class === "Bench"
   ) {
-    newElement.Status = element.Role;
-  } else {
-    newElement.Status = "Signed";
+    newElement.Status = newElement.Class;
   }
   switch (newElement.Spec) {
     case "Protection":
@@ -283,29 +321,65 @@ const formatRaidKeyVals = (element) => {
       newElement.Role = "Ranged-DPS";
       break;
     default:
-      return[]
-      break;
+      return [];
   }
   return [newElement];
 };
-
-const sortNewRaid = (raidInfo, raidcomp) => {
-  const formattedComp = raidcomp.flatMap((x) => formatRaidKeyVals(x));
-  formattedComp.sort((s1, s2) =>
+const sortRaid = (members)=>{
+  members.sort((s1, s2) =>
     s1.Spec < s2.Spec ? 1 : s1.Spec > s2.Spec ? -1 : 0
   );
-  formattedComp.sort((c1, c2) =>
+  members.sort((c1, c2) =>
     c1.Class < c2.Class ? 1 : c1.Class > c2.Class ? -1 : 0
   );
+  return members
+}
+const sortNewRaid = (raidInfo, raidcomp) => {
+  const formattedComp = raidcomp.flatMap((x) => formatRaidKeyVals(x));
+  const sortedComp= sortRaid(formattedComp)
   const raidObj = {
+    ...raidInfo,
     SortedRaids: {
-      RaidInfo: { ...raidInfo },
-      RaidMembers: { ...formattedComp },
+      RaidInfo: { 0: "Raid1" },
+      RaidMembers: { ...sortedComp },
     },
   };
   return raidObj;
 };
+const updateRaidMembers = (newRaid, oldRaid) => {
+  const raidToUpload = newRaid;
+  const membersToUpload = [];
+  const newRaidMembers = {};
+  const oldRaidMembers = {};
+  Object.keys(newRaid.SortedRaids.RaidMembers).forEach((key) => {
+    newRaidMembers[newRaid.SortedRaids.RaidMembers[key].Id] =
+      newRaid.SortedRaids.RaidMembers[key];
+  });
+  Object.keys(oldRaid.SortedRaids.RaidMembers).forEach((key) => {
+    const oldMember = oldRaid.SortedRaids.RaidMembers[key];
+    if (newRaidMembers[oldMember.Id] !== undefined) {
+      oldMember.Spec = newRaidMembers[oldMember.Id].Spec;
+      oldMember.Class = newRaidMembers[oldMember.Id].Class;
+      oldMember.Role = newRaidMembers[oldMember.Id].Role;
+      oldMember.Status = newRaidMembers[oldMember.Id].Status;
+      oldRaidMembers[oldMember.Id] = oldMember;
+    }
+  });
+  Object.keys(newRaidMembers).forEach((key) => {
+    const newMember = newRaidMembers[key];
+    if (oldRaidMembers[newMember.Id] === undefined) {
+      membersToUpload.push (newMember)
+    }
+    else{
+      membersToUpload.push( oldRaidMembers[newMember.Id])
+    }
+  });
+  const sortedMembersToUpload=sortRaid(membersToUpload)
+  raidToUpload.SortedRaids.RaidMembers = {...sortedMembersToUpload};
+  raidToUpload.SortedRaids.RaidInfo = oldRaid.SortedRaids.RaidInfo;
+  return raidToUpload;
+};
 
-client.login("OTE1MTkwODcwMDgzNTA2MTk3.YaX_6g.JplwoAxhw9pIMXu8qF3EMjx_btw");
+client.login(botToken.token);
 
 //https://discord.com/oauth2/authorize?client_id=915190870083506197&scope=bot&permissions=423860104288
